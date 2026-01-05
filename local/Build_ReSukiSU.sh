@@ -3,9 +3,9 @@
 set -e
 
 clear
-echo "===================================================="
-echo "  KernelSU Next OnePlus Kernel Build Configuration  "
-echo "===================================================="
+echo "==============================================="
+echo "  ReSukiSU OnePlus Kernel Build Configuration  "
+echo "==============================================="
 echo "  按回车键可直接使用 [方括号] 中的默认值"
 echo ""
 
@@ -22,6 +22,8 @@ CPU=$(ask "请输入 CPU 分支 (例如: sm8750, sm8650, sm8550, sm8475)" "sm865
 FEIL=$(ask "请输入手机型号 (例如: oneplus_13_b, oneplus_12_b, oneplus_11_b)" "oneplus_12_b")
 ANDROID_VERSION=$(ask "请输入安卓 KMI 版本 (android15, android14, android13, android12)" "android14")
 KERNEL_VERSION=$(ask "请输入内核版本 (6.6, 6.1, 5.15, 5.10)" "6.1")
+SUSFS=$(ask "是否启用 SUSFS? (On/Off)" "On")
+KPM=$(ask "是否启用 KPM (Kernel Patch Manager)? (On/Off)" "Off")
 lz4kd=$(ask "是否启用 lz4kd? (6.1 关闭时使用 lz4 + zstd; 6.6 关闭时使用 lz4) (On/Off)" "Off")
 bbr=$(ask "是否启用 BBR 拥塞控制算法? (On/Off)" "Off")
 bbg=$(ask "是否启用 Baseband-Guard 基带防护? (On/Off)" "On")
@@ -36,6 +38,8 @@ echo "手机型号                 : $FEIL"
 echo "CPU 分支                 : $CPU"
 echo "安卓 KMI 版本            : $ANDROID_VERSION"
 echo "内核版本                 : $KERNEL_VERSION"
+echo "是否启用 SUSFS           : $SUSFS"
+echo "是否启用 KPM             : $KPM"
 echo "是否启用 lz4kd           : $lz4kd"
 echo "是否启用 BBR             : $bbr"
 echo "是否启用 Baseband-Guard  : $bbg"
@@ -61,7 +65,11 @@ clear
 echo "✅ 必要构建依赖安装完成"
 
 echo "⚙️ 正在配置 ccache 缓存..."
-export CCACHE_DIR="$HOME/.ccache_${FEIL}_Next"
+if [ "$SUSFS" == "On" ]; then
+  export CCACHE_DIR="$HOME/.ccache_${FEIL}_ReSukiSU_SUSFS"
+else
+  export CCACHE_DIR="$HOME/.ccache_${FEIL}_ReSukiSU_NoSUSFS"
+fi
 export CCACHE_COMPILERCHECK="%compiler% -dumpmachine; %compiler% -dumpversion"
 export CCACHE_NOHASHDIR="true"
 export CCACHE_HARDLINK="true"
@@ -123,7 +131,7 @@ fi
 
 echo "✅ 内核仓库准备完毕并完成版本号清理"
 
-if [ "$bbg" = "On" ]; then
+if [ "$bbg" = "On" ] && [ "$KPM" = "Off" ]; then
     set -e
     cd kernel_platform/common
     echo "🛡️ 正在配置 Baseband-Guard 基带防护..."
@@ -133,29 +141,68 @@ if [ "$bbg" = "On" ]; then
     echo "✅ Baseband-Guard 配置完成"
 fi
 
-echo "⚡ 正在配置 KernelSU Next..."
+echo "⚡ 正在配置 ReSukiSU..."
 cd kernel_platform
-curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh" | bash -s dev-susfs
+curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s builtin
 
-cd KernelSU-Next
-KSU_VERSION=$(expr $(curl -sI "https://api.github.com/repos/KernelSU-Next/KernelSU-Next/commits?sha=dev&per_page=1" | grep -i "link:" | sed -n 's/.*page=\([0-9]*\)>; rel="last".*/\1/p') "+" 30000)
-export KSUVER=$(expr $KSU_VERSION)
-sed -i "s/DKSU_VERSION=11998/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
+cd KernelSU
+KSU_VERSION_COUNT=$(git rev-list --count main)
+export KSUVER=$(expr $KSU_VERSION_COUNT + 30000)
 
-echo "✅ KernelSU Next 版本信息配置完成."
+for i in {1..3}; do
+  KSU_API_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/builtin/kernel/Kbuild" | \
+    grep -m1 "KSU_VERSION_API :=" | cut -d'=' -f2 | tr -d '[:space:]')
+  [ -n "$KSU_API_VERSION" ] && break || sleep 2
+done
+
+if [ -z "$KSU_API_VERSION" ]; then
+  echo "❌ 错误：未能获取 KSU_API_VERSION" >&2
+  exit 1
+fi
+
+KSU_COMMIT_HASH=$(git ls-remote https://github.com/ReSukiSU/ReSukiSU.git refs/heads/builtin | cut -f1 | cut -c1-8)
+KSU_VERSION_FULL="v${KSU_API_VERSION}-${KSU_COMMIT_HASH}-xiaoxiaow@ReSukiSU"
+
+sed -i '/define get_ksu_version_full/,/endef/d' kernel/Kbuild
+sed -i '/KSU_VERSION_API :=/d' kernel/Kbuild
+sed -i '/KSU_VERSION_FULL :=/d' kernel/Kbuild
+
+TMP_FILE=$(mktemp)
+while IFS= read -r line; do
+  echo "$line" >> "$TMP_FILE"
+  if echo "$line" | grep -q 'REPO_OWNER :='; then
+    cat >> "$TMP_FILE" <<EOF
+define get_ksu_version_full
+v\\\$\$1-${KSU_COMMIT_HASH}-xiaoxiaow@ReSukiSU
+endef
+
+KSU_VERSION_API := ${KSU_API_VERSION}
+KSU_VERSION_FULL := ${KSU_VERSION_FULL}
+EOF
+  fi
+done < kernel/Kbuild
+mv "$TMP_FILE" kernel/Kbuild
+
+echo "✅ ReSukiSU 版本信息配置完成"
 cd ../..
 
 echo "🔧 正在克隆所需补丁..."
-git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${ANDROID_VERSION}-${KERNEL_VERSION}
+if [ "$SUSFS" = "On" ]; then
+    git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${ANDROID_VERSION}-${KERNEL_VERSION}
+fi
 git clone https://github.com/Xiaomichael/kernel_patches.git
 git clone https://github.com/ShirkNeko/SukiSU_patch.git
 
 cd kernel_platform
 echo "📝 正在复制补丁文件..."
-cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch ./common/
-# cp ../kernel_patches/next/scope_min_manual_hooks_v1.6.patch ./common/
-cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
-cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+
+if [ "$SUSFS" = "On" ]; then
+    cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch ./common/
+    cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
+    cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+else
+    cp ../kernel_patches/sukisu/scope_min_manual_hooks_v1.7.patch ./common/
+fi
 
 cp ../kernel_patches/zram/001-lz4.patch ./common/
 cp ../kernel_patches/zram/lz4armv8.S ./common/lib
@@ -180,7 +227,12 @@ cd ./common
 echo "📦 应用修复Unicode绕过补丁..."
 patch -p1 < unicode_bypass_fix.patch
 
-patch -p1 < 50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch || true
+if [ "$SUSFS" = "On" ]; then
+    patch -p1 < 50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch || true
+else
+    echo "📦 应用 MANUAL_HOOK 补丁..."
+    patch -p1 -F 3 < scope_min_manual_hooks_v1.7.patch
+fi
 
 if [ "$lz4kd" = "Off" ] && [ "$KERNEL_VERSION" = "6.1" ]; then
   echo "📦 正在为 6.1 应用 lz4 + zstd 补丁..."
@@ -200,10 +252,6 @@ if [ "$lz4kd" = "On" ]; then
   cp ../../SukiSU_patch/other/zram/zram_patch/${KERNEL_VERSION}/lz4k_oplus.patch ./
   patch -p1 -F 3 < lz4k_oplus.patch || true
 fi
-
-cp ../../kernel_patches/69_hide_stuff.patch ./
-patch -p1 -F 3 < 69_hide_stuff.patch || true
-# patch -p1 --fuzz=3 < scope_min_manual_hooks_v1.6.patch
 echo "✅ 所有补丁应用完成"
 cd ../..
 
@@ -239,10 +287,11 @@ fi
 echo "⚙️ 正在配置内核编译选项..."
 DEFCONFIG_PATH="$WORKSPACE/kernel_workspace/kernel_platform/common/arch/arm64/configs/gki_defconfig"
 
-cat <<EOT >> "$DEFCONFIG_PATH"
+echo "CONFIG_KSU=y" >> "$DEFCONFIG_PATH"
 
-#--- KernelSU Next & SUSFS Custom Configs ---
-CONFIG_KSU=y
+if [ "$SUSFS" = "On" ]; then
+    echo "📦 启用 SUSFS 功能..."
+    cat <<EOT >> "$DEFCONFIG_PATH"
 CONFIG_KSU_SUSFS=y
 CONFIG_KSU_SUSFS_SUS_PATH=y
 CONFIG_KSU_SUSFS_SUS_MOUNT=y
@@ -253,13 +302,25 @@ CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
 CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
 CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
 CONFIG_KSU_SUSFS_SUS_MAP=y
+EOT
+else
+    echo "📦 启用 MANUAL_HOOK..."
+    cat <<EOT >> "$DEFCONFIG_PATH"
+CONFIG_KSU_SUSFS=n
+CONFIG_KSU_MANUAL_HOOK=y
+EOT
+fi
 
-# 添加对 Mountify (backslashxx/mountify) 模块的支持
+cat <<EOT >> "$DEFCONFIG_PATH"
+
+# 为 Mountify (backslashxx/mountify) 模块开启必要选项
 CONFIG_TMPFS_XATTR=y
 CONFIG_TMPFS_POSIX_ACL=y
 EOT
 
-if [ "$bbg" = "On" ]; then
+if [ "$KPM" = "On" ]; then echo "CONFIG_KPM=y" >> "$DEFCONFIG_PATH"; fi
+
+if [ "$bbg" = "On" ] && [ "$KPM" = "Off" ]; then
   echo "⚡ 配置 BBG 中..."
   cat <<EOT >> "$DEFCONFIG_PATH"
 CONFIG_BBG=y
@@ -375,15 +436,31 @@ if [ -z "$IMAGE_PATH" ]; then echo "❌ 严重错误：编译完成后未找到 
 echo "✅ 已找到 Kernel Image: $IMAGE_PATH"
 cp "$IMAGE_PATH" ./AnyKernel3/Image
 
-if [ "$lz4kd" = "On" ]; then
-  ARTIFACT_NAME="${FEIL}_KernelSU_Next_lz4kd_${KSUVER}"
-elif [ "$KERNEL_VERSION" = "6.1" ]; then
-  ARTIFACT_NAME="${FEIL}_KernelSU_Next_lz4_zstd_${KSUVER}"
-elif [ "$KERNEL_VERSION" = "6.6" ]; then
-  ARTIFACT_NAME="${FEIL}_KernelSU_Next_lz4_${KSUVER}"
-else
-  ARTIFACT_NAME="${FEIL}_KernelSU_Next_${KSUVER}"
+if [ "$KPM" = 'On' ]; then
+    echo "🧩 正在对内核 Image 应用 KPM 补丁..."
+    mkdir -p kpm_patch_temp && cd kpm_patch_temp
+    curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.12.2/patch_linux
+    chmod +x patch_linux
+    cp "$WORKSPACE/AnyKernel3/Image" ./Image
+    ./patch_linux
+    mv oImage "$WORKSPACE/AnyKernel3/Image"
+    cd .. && rm -rf kpm_patch_temp
+    echo "✅ KPM 补丁应用完成"
 fi
+
+if [ "$lz4kd" = "On" ]; then
+  ARTIFACT_NAME="${FEIL}_ReSukiSU_lz4kd_${KSUVER}"
+elif [ "$KERNEL_VERSION" = "6.1" ]; then
+  ARTIFACT_NAME="${FEIL}_ReSukiSU_lz4_zstd_${KSUVER}"
+elif [ "$KERNEL_VERSION" = "6.6" ]; then
+  ARTIFACT_NAME="${FEIL}_ReSukiSU_lz4_${KSUVER}"
+else
+  ARTIFACT_NAME="${FEIL}_ReSukiSU_${KSUVER}"
+fi
+if [ "$SUSFS" = "On" ]; then
+  ARTIFACT_NAME="${ARTIFACT_NAME}_SUSFS"
+fi
+
 FINAL_ZIP_NAME="${ARTIFACT_NAME}.zip"
 
 echo "📦 正在创建最终可刷入压缩包: ${FINAL_ZIP_NAME}..."

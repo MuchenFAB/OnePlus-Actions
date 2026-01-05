@@ -33,7 +33,7 @@ on:
           - 'oneplus_ace_6'
           - 'oneplus_pad_2_pro_b'
           - 'oneplus_pad_3_b'
-          - 'oneplus_ace5_ultra'
+          - 'oneplus_ace5_ultra_b'
           - 'oneplus_12_b'
           - 'oneplus_ace3_pro_v'
           - 'oneplus_ace5_b'
@@ -41,20 +41,20 @@ on:
           - 'oneplus_pad2_v'
           - 'oneplus_pad_pro_v'
           - 'oneplus_ace5_race_b'
-          - 'oneplus_ace5_race'
-          - 'oneplus_nord_5'
+          - 'oneplus_ace5_race_v'
+          - 'oneplus_nord_5_b'
           - 'oneplus_11_b'
           - 'oneplus_12r_b'
-          - 'oneplus_ace2_pro_v'
+          - 'oneplus_ace2_pro_b'
           - 'oneplus_ace3_b'
           - 'oneplus_open_b'
           - 'oneplus_10t'
           - 'oneplus_11r'
           - 'oneplus_ace2'
           - 'oneplus_ace_pro'
-          - 'oneplus_10_pro'
-          - 'oneplus_ace_3v'
-          - 'onrplus_nord_4'
+          - 'oneplus_10_pro_v'
+          - 'oneplus_ace_3v_b'
+          - 'oneplus_nord_4_b'
           - 'oneplus_nord_ce4_lite_5g'
         default: 'oneplus_12_b'
         
@@ -81,58 +81,67 @@ on:
         default: '6.1'
 
       SUSFS:
-       description: "是否启用SUSFS"
-       required: true
-       type: choice
-       options:
+        description: "是否启用SUSFS"
+        required: true
+        type: choice
+        options:
           - 'On'
           - 'Off'
-       default: 'On'
+        default: 'On'
 
       KPM:
-       description: "是否启用KPM"
-       required: true
-       type: choice
-       options:
-           - 'On'
-           - 'Off'
-       default: 'Off'
+        description: "是否启用KPM"
+        required: true
+        type: choice
+        options:
+          - 'On'
+          - 'Off'
+        default: 'Off'
        
       lz4kd:
-       description: "是否启用lz4kd(6.1 关闭时使用 lz4 + zstd; 6.6 关闭时使用 lz4)"
-       required: true
-       type: choice
-       options:
+        description: "是否启用lz4kd(6.1 关闭时使用 lz4 + zstd; 6.6 关闭时使用 lz4)"
+        required: true
+        type: choice
+        options:
           - 'On'
           - 'Off'
-       default: 'Off'
-       
-      bbr:
-       description: "是否启用BBR算法(对手机日用无太大意义甚至可能负优化)"
-       required: true
-       type: choice
-       options:
-          - 'On'
-          - 'Off'
-       default: 'Off'
+        default: 'Off'
 
       bbg:
         description: "是否启用BBG基带保护"
         required: true
         type: choice
         options:
-           - 'On'
-           - 'Off'
-        default: 'On'
-        
-      proxy:
-       description: "是否添加代理性能优化(联发科芯片跑的时候请关闭否则出现恶性问题)"
-       required: true
-       type: choice
-       options:
           - 'On'
           - 'Off'
-       default: 'On'
+        default: 'On'
+       
+      bbr:
+        description: "是否启用BBR算法(对手机日用无太大意义甚至可能负优化)"
+        required: true
+        type: choice
+        options:
+          - 'On'
+          - 'Off'
+        default: 'Off'
+
+      proxy:
+        description: "是否添加代理性能优化(联发科芯片跑的时候请关闭否则出现恶性问题)"
+        required: true
+        type: choice
+        options:
+          - 'On'
+          - 'Off'
+        default: 'On'
+
+      UNICODE_BYPASS:
+        description: "是否添加Unicode零宽绕过修复补丁"
+        required: true
+        type: choice
+        options:
+          - 'On'
+          - 'Off'
+        default: 'On'
          
 jobs:
   build:
@@ -325,6 +334,14 @@ jobs:
           cp ../kernel_patches/zram/001-lz4.patch ./common/
           cp ../kernel_patches/zram/lz4armv8.S ./common/lib
           cp ../kernel_patches/zram/002-zstd.patch ./common/
+
+          if [ "${{ github.event.inputs.UNICODE_BYPASS }}" = "On" ]; then
+            if [ "${{ github.event.inputs.KERNEL_VERSION }}" = "6.1" ] || [ "${{ github.event.inputs.KERNEL_VERSION }}" = "6.6" ]; then
+              cp ../kernel_patches/common/unicode_bypass_fix_6.1+.patch ./common/unicode_bypass_fix.patch
+            elif [ "${{ github.event.inputs.KERNEL_VERSION }}" = "5.15" ] || [ "${{ github.event.inputs.KERNEL_VERSION }}" = "5.10" ]; then
+              cp ../kernel_patches/common/unicode_bypass_fix_6.1-.patch ./common/unicode_bypass_fix.patch
+            fi
+          fi
           
           if [ "${{ github.event.inputs.lz4kd }}" == "On" ]; then
             # Copy lz4k from ShirkNeko
@@ -335,7 +352,12 @@ jobs:
           fi
           
           cd ./common
-          
+
+          if [ "${{ github.event.inputs.UNICODE_BYPASS }}" = "On" ]; then
+            echo "📦 正在应用Unicode零宽绕过修复补丁..."
+            patch -p1 < unicode_bypass_fix.patch
+          fi
+
           if [ "${{ github.event.inputs.lz4kd }}" = "Off" ] && [ "${{ github.event.inputs.KERNEL_VERSION }}" = "6.1" ]; then
             echo "📦 应用lz4+zstd补丁..."
             git apply -p1 < 001-lz4.patch || true
@@ -371,7 +393,7 @@ jobs:
           cd kernel_workspace/kernel_platform/common
 
           echo "⬇️ 正在拉取风驰补丁"
-          if [ "${{ github.event.inputs.FEIL }}" == "oneplus_ace5_ultra" ]; then
+          if [ "${{ github.event.inputs.FEIL }}" == "oneplus_ace5_ultra" ] || [ "${{ github.event.inputs.FEIL }}" = "oneplus_ace5_ultra_b" ]; then
               echo "⚠️ Ace5 Ultra 需要使用 mt6991 分支的补丁"
               git clone https://github.com/Numbersf/SCHED_PATCH.git -b "mt6991"
           else
@@ -507,7 +529,7 @@ jobs:
         run: |
           echo "🏗️ 开始内核编译..."
           if [ "${{ github.event.inputs.KERNEL_VERSION }}" == "6.1" ]; then
-            export KBUILD_BUILD_TIMESTAMP="Tue Sep 23 07:41:33 UTC 2025"
+            export KBUILD_BUILD_TIMESTAMP="Tue Dec  9 06:49:31 UTC 2025"
             export KBUILD_BUILD_VERSION=1
             export PATH="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747c/bin:$PATH"
             export PATH="/usr/lib/ccache:$PATH"
@@ -578,17 +600,22 @@ jobs:
         id: set_name
         run: |
           if [ "${{ github.event.inputs.lz4kd }}" = "On" ]; then
-            echo "ARTIFACT_NAME=${{ github.event.inputs.FEIL }}_SukiSU_Ultra_lz4kd_${{ env.KSUVER }}" >> $GITHUB_OUTPUT
+            BASE_NAME="${{ github.event.inputs.FEIL }}_SukiSU_Ultra_lz4kd_${{ env.KSUVER }}"
           elif [ "${{ github.event.inputs.KERNEL_VERSION }}" = "6.1" ]; then
-            echo "ARTIFACT_NAME=${{ github.event.inputs.FEIL }}_SukiSU_Ultra_lz4_zstd_${{ env.KSUVER }}" >> $GITHUB_OUTPUT
+            BASE_NAME="${{ github.event.inputs.FEIL }}_SukiSU_Ultra_lz4_zstd_${{ env.KSUVER }}"
           elif [ "${{ github.event.inputs.KERNEL_VERSION }}" = "6.6" ]; then
-            echo "ARTIFACT_NAME=${{ github.event.inputs.FEIL }}_SukiSU_Ultra_lz4_${{ env.KSUVER }}" >> $GITHUB_OUTPUT
+            BASE_NAME="${{ github.event.inputs.FEIL }}_SukiSU_Ultra_lz4_${{ env.KSUVER }}"
           else
-            echo "ARTIFACT_NAME=${{ github.event.inputs.FEIL }}_SukiSU_Ultra_${{ env.KSUVER }}" >> $GITHUB_OUTPUT
+            BASE_NAME="${{ github.event.inputs.FEIL }}_SukiSU_Ultra_${{ env.KSUVER }}"
           fi
-          if [ "${{ github.event.inputs.SUSFS }}" == "On" ]; then
-            echo "ARTIFACT_NAME=${{ steps.set_name.outputs.ARTIFACT_NAME }}_SUSFS" >> $GITHUB_OUTPUT
+          
+          if [ "${{ github.event.inputs.SUSFS }}" = "On" ]; then
+            FINAL_NAME="${BASE_NAME}_SUSFS"
+          else
+            FINAL_NAME="${BASE_NAME}"
           fi
+          
+          echo "ARTIFACT_NAME=${FINAL_NAME}" >> $GITHUB_OUTPUT
 
       - name: "📤 Upload AnyKernel3 | 上传 AnyKernel3"
         uses: actions/upload-artifact@v4
