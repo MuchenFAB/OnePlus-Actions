@@ -20,7 +20,7 @@ ask() {
 
 CPU=$(ask "请输入 CPU 分支 (例如: sm8750, sm8650, sm8550, sm8475)" "sm8650")
 FEIL=$(ask "请输入手机型号 (例如: oneplus_13_b, oneplus_12_b, oneplus_11_b)" "oneplus_12_b")
-ANDROID_VERSION=$(ask "请输入安卓 KMI 版本 (android15, android14, android13, android12)" "android14")
+ANDROID_VERSION=$(ask "请输入内核安卓 KMI 版本 (android15, android14, android13, android12)" "android14")
 KERNEL_VERSION=$(ask "请输入内核版本 (6.6, 6.1, 5.15, 5.10)" "6.1")
 SUSFS=$(ask "是否启用 SUSFS? (On/Off)" "On")
 KPM=$(ask "是否启用 KPM (Kernel Patch Manager)? (On/Off)" "Off")
@@ -145,47 +145,13 @@ fi
 
 echo "⚡ 正在配置 ReSukiSU..."
 cd kernel_platform
-curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s builtin
+curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
 
 cd KernelSU
 KSU_VERSION_COUNT=$(git rev-list --count main)
-export KSUVER=$(expr $KSU_VERSION_COUNT + 30000)
+export KSUVER=$(expr $KSU_VERSION_COUNT + 30700)
 
-for i in {1..3}; do
-  KSU_API_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/builtin/kernel/Kbuild" | \
-    grep -m1 "KSU_VERSION_API :=" | cut -d'=' -f2 | tr -d '[:space:]')
-  [ -n "$KSU_API_VERSION" ] && break || sleep 2
-done
-
-if [ -z "$KSU_API_VERSION" ]; then
-  echo "❌ 错误：未能获取 KSU_API_VERSION" >&2
-  exit 1
-fi
-
-KSU_COMMIT_HASH=$(git ls-remote https://github.com/ReSukiSU/ReSukiSU.git refs/heads/builtin | cut -f1 | cut -c1-8)
-KSU_VERSION_FULL="v${KSU_API_VERSION}-${KSU_COMMIT_HASH}-xiaoxiaow@ReSukiSU"
-
-sed -i '/define get_ksu_version_full/,/endef/d' kernel/Kbuild
-sed -i '/KSU_VERSION_API :=/d' kernel/Kbuild
-sed -i '/KSU_VERSION_FULL :=/d' kernel/Kbuild
-
-TMP_FILE=$(mktemp)
-while IFS= read -r line; do
-  echo "$line" >> "$TMP_FILE"
-  if echo "$line" | grep -q 'REPO_OWNER :='; then
-    cat >> "$TMP_FILE" <<EOF
-define get_ksu_version_full
-v\\\$\$1-${KSU_COMMIT_HASH}-xiaoxiaow@ReSukiSU
-endef
-
-KSU_VERSION_API := ${KSU_API_VERSION}
-KSU_VERSION_FULL := ${KSU_VERSION_FULL}
-EOF
-  fi
-done < kernel/Kbuild
-mv "$TMP_FILE" kernel/Kbuild
-
-echo "✅ ReSukiSU 版本信息配置完成"
+echo "✅ ReSukiSU 配置完成"
 cd ../..
 
 echo "🔧 正在克隆所需补丁..."
@@ -203,7 +169,7 @@ if [ "$SUSFS" = "On" ]; then
     cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
     cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 else
-    cp ../kernel_patches/sukisu/scope_min_manual_hooks_v1.7.patch ./common/
+    cp ../kernel_patches/sukisu/scope_min_manual_hooks_v1.9.patch ./common/
 fi
 
 cp ../kernel_patches/zram/001-lz4.patch ./common/
@@ -238,7 +204,7 @@ if [ "$SUSFS" = "On" ]; then
     patch -p1 < 50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch || true
 else
     echo "📦 应用 MANUAL_HOOK 补丁..."
-    patch -p1 -F 3 < scope_min_manual_hooks_v1.7.patch
+    patch -p1 -F 3 < scope_min_manual_hooks_v1.9.patch
 fi
 
 if [ "$lz4kd" = "Off" ] && [ "$KERNEL_VERSION" = "6.1" ]; then
@@ -295,6 +261,8 @@ echo "⚙️ 正在配置内核编译选项..."
 DEFCONFIG_PATH="$WORKSPACE/kernel_workspace/kernel_platform/common/arch/arm64/configs/gki_defconfig"
 
 echo "CONFIG_KSU=y" >> "$DEFCONFIG_PATH"
+echo "CONFIG_KSU_FULL_NAME_FORMAT=\"%TAG_NAME%-%COMMIT_SHA%-xiaoxiaow@ReSukiSU\"" >> "$DEFCONFIG_PATH"
+echo "CONFIG_KSU_MULTI_MANAGER_SUPPORT=y" >> "$DEFCONFIG_PATH"
 
 if [ "$SUSFS" = "On" ]; then
     echo "📦 启用 SUSFS 功能..."
@@ -443,7 +411,7 @@ cp "$IMAGE_PATH" ./AnyKernel3/Image
 if [ "$KPM" = 'On' ]; then
     echo "🧩 正在对内核 Image 应用 KPM 补丁..."
     mkdir -p kpm_patch_temp && cd kpm_patch_temp
-    curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.12.2/patch_linux
+    curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.13.0/patch_linux
     chmod +x patch_linux
     cp "$WORKSPACE/AnyKernel3/Image" ./Image
     ./patch_linux

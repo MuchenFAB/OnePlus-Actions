@@ -20,7 +20,7 @@ ask() {
 
 CPU=$(ask "请输入 CPU 分支 (例如: sm8750, sm8650, sm8550, sm8475)" "sm8650")
 FEIL=$(ask "请输入手机型号 (例如: oneplus_13_b, oneplus_12_b, oneplus_11_b)" "oneplus_12_b")
-ANDROID_VERSION=$(ask "请输入安卓 KMI 版本 (android15, android14, android13, android12)" "android14")
+ANDROID_VERSION=$(ask "请输入内核安卓 KMI 版本 (android15, android14, android13, android12)" "android14")
 KERNEL_VERSION=$(ask "请输入内核版本 (6.6, 6.1, 5.15, 5.10)" "6.1")
 SUSFS=$(ask "是否启用 SUSFS? (On/Off)" "On")
 KPM=$(ask "是否启用 KPM (Kernel Patch Manager)? (On/Off)" "Off")
@@ -203,7 +203,7 @@ if [ "$SUSFS" = "On" ]; then
     cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
     cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 else
-    cp ../kernel_patches/sukisu/scope_min_manual_hooks_v1.6_fix.patch ./common/
+    cp ../kernel_patches/sukisu/scope_min_manual_hooks_v1.6.patch ./common/
 fi
 
 cp ../kernel_patches/zram/001-lz4.patch ./common/
@@ -238,7 +238,7 @@ if [ "$SUSFS" = "On" ]; then
     patch -p1 < 50_add_susfs_in_gki-${ANDROID_VERSION}-${KERNEL_VERSION}.patch || true
 else
     echo "📦 应用 MANUAL_HOOK 补丁..."
-    patch -p1 -F 3 < scope_min_manual_hooks_v1.6_fix.patch
+    patch -p1 -F 3 < scope_min_manual_hooks_v1.6.patch
 fi
 
 if [ "$lz4kd" = "Off" ] && [ "$KERNEL_VERSION" = "6.1" ]; then
@@ -443,7 +443,7 @@ cp "$IMAGE_PATH" ./AnyKernel3/Image
 if [ "$KPM" = 'On' ]; then
     echo "🧩 正在对内核 Image 应用 KPM 补丁..."
     mkdir -p kpm_patch_temp && cd kpm_patch_temp
-    curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.12.2/patch_linux
+    curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.13.0/patch_linux
     chmod +x patch_linux
     cp "$WORKSPACE/AnyKernel3/Image" ./Image
     ./patch_linux

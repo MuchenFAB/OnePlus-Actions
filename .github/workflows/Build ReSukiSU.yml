@@ -41,17 +41,16 @@ on:
           - 'oneplus_pad2_b'
           - 'oneplus_pad_pro_b'
           - 'oneplus_ace5_race_b'
-          - 'oneplus_ace5_race_v'
           - 'oneplus_nord_5_b'
           - 'oneplus_11_b'
           - 'oneplus_12r_b'
           - 'oneplus_ace2_pro_b'
           - 'oneplus_ace3_b'
           - 'oneplus_open_b'
-          - 'oneplus_10t'
+          - 'oneplus_10t_v'
           - 'oneplus_11r_b'
           - 'oneplus_ace2_b'
-          - 'oneplus_ace_pro'
+          - 'oneplus_ace_pro_v'
           - 'oneplus_10_pro_v'
           - 'oneplus_ace_3v_b'
           - 'oneplus_nord_4_b'
@@ -60,7 +59,7 @@ on:
         default: 'oneplus_12_b'
         
       ANDROID_VERSION:
-        description: "安卓KMI版本"
+        description: "内核安卓KMI版本"
         required: true
         type: choice
         options:
@@ -287,22 +286,11 @@ jobs:
 
           # 下载并执行设置脚本
           echo "🛠️ 正在设置ReSukiSU..."
-          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s builtin
-          
+          curl -LSs "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" | bash -s main
+
           cd KernelSU
-          echo "⬇️ 下载ReSukiSU设置工具..."
-          curl -L -o resukisu_setup.bin https://github.com/Xiaomichael/OnePlus-Actions/raw/Build/script/resukisu_setup.bin
-          chmod +x resukisu_setup.bin
-          
-          # 验证Kbuild存在
-          if [ ! -f "kernel/Kbuild" ]; then
-            echo "❌ 错误：缺少kernel/Kbuild"
-            ls -la
-            exit 1
-          fi
-          
-          ./resukisu_setup.bin
-          rm -rf ./resukisu_setup.bin
+          KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 30700)
+          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
           
           echo "✅ ReSukiSU 配置完成"
           
@@ -324,7 +312,7 @@ jobs:
             cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
             cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
           else
-            cp ../kernel_patches/sukisu/scope_min_manual_hooks_v1.7.patch ./common/
+            cp ../kernel_patches/sukisu/scope_min_manual_hooks_v1.9.patch ./common/
           fi
           cp ../kernel_patches/zram/001-lz4.patch ./common/
           cp ../kernel_patches/zram/lz4armv8.S ./common/lib
@@ -377,7 +365,7 @@ jobs:
             patch -p1 < 50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch || true
           else
             echo "📦 应用MANUAL_HOOK补丁..."
-            patch -p1 -F 3 < scope_min_manual_hooks_v1.7.patch
+            patch -p1 -F 3 < scope_min_manual_hooks_v1.9.patch
           fi
 
           echo "✅ 所有补丁应用完成"
@@ -418,7 +406,10 @@ jobs:
           echo "⚙️ 正在配置内核编译选项..."
           
           echo "📦 启用 KSU 支持..."
-          echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
+          curl -L -o resukisu_setup.bin https://github.com/Xiaomichael/OnePlus-Actions/raw/Build/script/resukisu_setup.bin
+          chmod +x resukisu_setup.bin
+          ./resukisu_setup.bin
+          rm -rf ./resukisu_setup.bin
           
           if [ "${{ github.event.inputs.KPM }}" == "On" ]; then
             echo "📦 启用 KPM..."
@@ -582,7 +573,7 @@ jobs:
         run: |
           echo "🔧 正在应用KPM补丁..."
           cd kernel_workspace/kernel_platform/out/Final-Image-Find
-          curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.12.2/patch_linux
+          curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.13.0/patch_linux
           chmod +x patch_linux
           ./patch_linux
           rm -f Image
