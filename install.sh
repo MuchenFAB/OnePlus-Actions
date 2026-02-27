@@ -46,7 +46,10 @@ VER_PARAM="${OLLAMA_VERSION:+?version=$OLLAMA_VERSION}"
 # Linux
 ###########################################
 
+export OLLAMA_MIRROR="https://edgeone.gh-proxy.org/https://github.com/ollama/ollama/releases/download"
+
 [ "$OS" = "Linux" ] || error 'This script is intended to run on Linux and macOS only.'
+
 
 IS_WSL2=false
 
@@ -118,7 +121,7 @@ fi
 status "Installing ollama to $OLLAMA_INSTALL_DIR"
 $SUDO install -o0 -g0 -m755 -d $BINDIR
 $SUDO install -o0 -g0 -m755 -d "$OLLAMA_INSTALL_DIR/lib/ollama"
-download_and_extract "https://edgeone.gh-proxy.org/https://github.com/ollama/ollama/releases/download/v0.17.4/ollama-linux-amd64.tar.zst" "$OLLAMA_INSTALL_DIR" "ollama-linux-${ARCH}"
+download_and_extract "https://edgeone.gh-proxy.org/https://github.com/ollama/ollama/releases/download" "$OLLAMA_INSTALL_DIR" "ollama-linux-${ARCH}"
 
 if [ "$OLLAMA_INSTALL_DIR/bin/ollama" != "$BINDIR/ollama" ] ; then
     status "Making ollama accessible in the PATH in $BINDIR"
@@ -128,9 +131,9 @@ fi
 # Check for NVIDIA JetPack systems with additional downloads
 if [ -f /etc/nv_tegra_release ] ; then
     if grep R36 /etc/nv_tegra_release > /dev/null ; then
-        download_and_extract "https://edgeone.gh-proxy.org/https://github.com/ollama/ollama/releases/download/v0.17.4/ollama-linux-amd64.tar.zst" "$OLLAMA_INSTALL_DIR" "ollama-linux-${ARCH}-jetpack6"
+        download_and_extract "https://edgeone.gh-proxy.org/https://github.com/ollama/ollama/releases/download" "$OLLAMA_INSTALL_DIR" "ollama-linux-${ARCH}-jetpack6"
     elif grep R35 /etc/nv_tegra_release > /dev/null ; then
-        download_and_extract "https://edgeone.gh-proxy.org/https://github.com/ollama/ollama/releases/download/v0.17.4/ollama-linux-amd64.tar.zst" "$OLLAMA_INSTALL_DIR" "ollama-linux-${ARCH}-jetpack5"
+        download_and_extract "https://edgeone.gh-proxy.org/https://github.com/ollama/ollama/releases/download" "$OLLAMA_INSTALL_DIR" "ollama-linux-${ARCH}-jetpack5"
     else
         warning "Unsupported JetPack version detected.  GPU may not be supported"
     fi
