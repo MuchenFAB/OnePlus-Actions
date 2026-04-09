@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - 'sm8750'
+          - 'sm8735'
           - 'mt6991'
           - 'sm8650'
           - 'mt6989'
@@ -17,6 +18,7 @@ on:
           - 'sm8450'
           - 'sm8475'
           - 'sm7675'
+          - 'sm7635'
           - 'sm7550'
           - 'sm6375'
         default: 'sm8650'
@@ -34,6 +36,7 @@ on:
           - 'oneplus_pad_2_pro_b'
           - 'oneplus_pad_3_b'
           - 'oneplus_ace5_ultra_b'
+          - 'oneplus_turbo_6'
           - 'oneplus_12_b'
           - 'oneplus_ace3_pro_b'
           - 'oneplus_ace5_b'
@@ -51,8 +54,9 @@ on:
           - 'oneplus_11r_b'
           - 'oneplus_ace2_b'
           - 'oneplus_ace_pro_v'
-          - 'oneplus_10_pro_v'
+          - 'oneplus_10_pro_b'
           - 'oneplus_ace_3v_b'
+          - 'oneplus_turbo_6v'
           - 'oneplus_nord_4_b'
           - 'oneplus_nord_ce4_lite_5g'
           - 'oneplus_nord_ce4_b'
@@ -178,7 +182,7 @@ jobs:
          
       - name: "💾 Restore ccache (With SUSFS) | 恢复ccache缓存 (With SUSFS)"
         if: ${{ github.event.inputs.SUSFS == 'On' }}
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ runner.os }}-${{ github.ref }}-${{ github.event.inputs.FEIL }}-Official-SUSFS
@@ -188,7 +192,7 @@ jobs:
 
       - name: "💾 Restore ccache (Without SUSFS) | 恢复ccache缓存 (Without SUSFS)"
         if: ${{ github.event.inputs.SUSFS == 'Off' }}
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ runner.os }}-${{ github.ref }}-${{ github.event.inputs.FEIL }}-Official-NoSUSFS
@@ -287,34 +291,16 @@ jobs:
 
           echo "⬇️ 下载所需补丁..."
           if [ "${{ github.event.inputs.SUSFS }}" == "On" ]; then
-            git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}
+            git clone https://github.com/cctv18/susfs4oki.git -b oki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}
           fi
           git clone https://github.com/Xiaomichael/kernel_patches.git
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
 
           cd kernel_platform
           echo "📝 复制补丁文件..."
-          if [ "${{ github.event.inputs.SUSFS }}" == "On" ]; then
-            cp ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
-            PATCH_FILE="./KernelSU/10_enable_susfs_for_ksu.patch"
-            if [ -f "$PATCH_FILE" ]; then
-              if grep -q "a/kernel/Makefile" "$PATCH_FILE"; then
-                echo "🛠️ 检测到旧版 Makefile 补丁代码，正在执行修复..."
-                sed -i 's|kernel/Makefile|kernel/Kbuild|g' "$PATCH_FILE"
-                sed -i 's|.*compdb.*|@@ -75,4 +75,13 @@ ccflags-y += -DEXPECTED_HASH=\\"$(KSU_EXPECTED_HASH)\\"|' "$PATCH_FILE"
-                sed -i 's|^ clean:| ccflags-y += -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat -Wno-missing-prototypes|' "$PATCH_FILE"
-                sed -i 's|.*make -C.*| ccflags-y += -Wno-declaration-after-statement -Wno-unused-function|' "$PATCH_FILE"
-                echo "✅ 补丁修复完成！"
-              else
-                echo "📝 补丁代码已修复至 Kbuild 或不匹配，跳过修改..."
-              fi
-            else
-              echo "❌ 未找到SUSFS补丁！"
-              exit 1
-            fi
-            cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch ./common/
-            cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
-            cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+            cp ../susfs4oki/kernel_patches/50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch ./common/
+            cp ../susfs4oki/kernel_patches/fs/* ./common/fs/
+            cp ../susfs4oki/kernel_patches/include/linux/* ./common/include/linux/
           fi
 
           cp ../kernel_patches/zram/001-lz4.patch ./common/
@@ -583,7 +569,7 @@ jobs:
           echo "ARTIFACT_NAME=${FINAL_NAME}" >> $GITHUB_OUTPUT
 
       - name: "📤 Upload AnyKernel3 | 上传 AnyKernel3"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.set_name.outputs.ARTIFACT_NAME }}
           path: ./AnyKernel3/*
@@ -596,7 +582,7 @@ jobs:
           
       - name: "📤 Upload zram.ko | 上传 zram.ko"
         # if: ${{ github.event.inputs.lz4kd == 'On' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ github.event.inputs.FEIL }}_zram.ko
           path: ./kernel_workspace/kernel_platform/common/out/drivers/block/zram/zram.ko
